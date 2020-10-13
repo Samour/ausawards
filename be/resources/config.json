@@ -1,0 +1,7 @@
+{
+  "app_name": "ausawards-be",
+  "mongo": {
+    "uri": "mongodb://localhost:27017",
+    "database": "ausawards-dev"
+  }
+}
