@@ -1,35 +1,54 @@
 use crate::converters::user::UserConverterImpl;
 use crate::converters::UserConverter;
 use crate::domain::AppConfig;
+use crate::repositories::role::RoleRepositoryImpl;
+use crate::repositories::session::UserSessionRepositoryImpl;
 use crate::repositories::users::UsersRepositoryImpl;
-use crate::repositories::UsersRepository;
+use crate::repositories::{RoleRepository, UserSessionRepository, UsersRepository};
 use crate::routes;
 use crate::services::config::FileConfigService;
-use crate::services::users::UsersServiceImpl;
-use crate::services::{ConfigService, UsersService};
+use crate::services::users::{
+  HashServiceImpl, RolesServiceImpl, SessionServiceImpl, TokenServiceImpl, UsersServiceImpl,
+};
+use crate::services::{
+  ConfigService, HashService, RolesService, SessionService, TokenService, UsersService,
+};
 use mongodb::{Client, Database};
 use std::sync::Arc;
 use warp::filters::BoxedFilter;
 use warp::Reply;
 
+const COLLECTION_USERS: &str = "Users";
+const COLLECTION_SESSIONS: &str = "UserSessions";
+const COLLECTION_ROLES: &str = "Roles";
+
 pub struct AppManager {}
 
 impl AppManager {
   pub async fn build() -> BoxedFilter<(impl Reply,)> {
-    let config_service = Arc::new(AppManager::config_service());
+    let config_service = AppManager::config_service();
     let database = AppManager::database(config_service.get_config()).await;
-    let users_service = Arc::new(AppManager::users_service(database));
-    AppManager::router(config_service, users_service)
+    let hash_service = AppManager::hash_service();
+    let users_service =
+      AppManager::users_service(Arc::clone(&hash_service), Database::clone(&database));
+    let session_service = AppManager::session_service(
+      Arc::clone(&config_service),
+      hash_service,
+      Arc::clone(&users_service),
+      database,
+    );
+
+    AppManager::router(config_service, users_service, session_service)
   }
 
-  fn config_service() -> impl ConfigService {
+  fn config_service() -> Arc<dyn ConfigService + Send + Sync> {
     let mut file_config_service = FileConfigService::new("resources/config.json");
     if let Err(e) = file_config_service.read_config() {
       log::error!("Error attempting to load file: {:?}", e);
       panic!();
     }
 
-    file_config_service
+    Arc::new(file_config_service)
   }
 
   async fn database(config: AppConfig) -> Database {
@@ -42,24 +61,81 @@ impl AppManager {
     }
   }
 
-  fn user_converter() -> impl UserConverter {
-    UserConverterImpl::new()
+  fn user_converter() -> Arc<dyn UserConverter + Send + Sync> {
+    Arc::new(UserConverterImpl::new())
   }
 
-  fn users_repository(database: Database) -> impl UsersRepository {
-    UsersRepositoryImpl::new(database.collection("Users"))
+  fn users_repository(database: Database) -> Arc<dyn UsersRepository + Send + Sync> {
+    Arc::new(UsersRepositoryImpl::new(
+      database.collection(COLLECTION_USERS),
+    ))
   }
 
-  fn users_service(database: Database) -> impl UsersService {
-    let user_converter = Arc::new(AppManager::user_converter());
-    let users_repository = Arc::new(AppManager::users_repository(database));
-    UsersServiceImpl::new(user_converter, users_repository)
+  fn session_repository(database: Database) -> Arc<dyn UserSessionRepository + Send + Sync> {
+    Arc::new(UserSessionRepositoryImpl::new(
+      database.collection(COLLECTION_SESSIONS),
+    ))
+  }
+
+  fn role_repository(database: Database) -> Arc<dyn RoleRepository + Send + Sync> {
+    Arc::new(RoleRepositoryImpl::new(
+      database.collection(COLLECTION_ROLES),
+    ))
+  }
+
+  fn hash_service() -> Arc<dyn HashService + Send + Sync> {
+    Arc::new(HashServiceImpl::new())
+  }
+
+  fn token_service(
+    config_service: Arc<dyn ConfigService + Send + Sync>,
+  ) -> Arc<dyn TokenService + Send + Sync> {
+    Arc::new(TokenServiceImpl::new(config_service))
+  }
+
+  fn users_service(
+    hash_service: Arc<dyn HashService + Send + Sync>,
+    database: Database,
+  ) -> Arc<dyn UsersService + Send + Sync> {
+    let user_converter = AppManager::user_converter();
+    let users_repository = AppManager::users_repository(database);
+    Arc::new(UsersServiceImpl::new(
+      user_converter,
+      hash_service,
+      users_repository,
+    ))
+  }
+
+  fn roles_service(database: Database) -> Arc<dyn RolesService + Send + Sync> {
+    let role_repository = AppManager::role_repository(database);
+    Arc::new(RolesServiceImpl::new(role_repository))
+  }
+
+  fn session_service(
+    config_service: Arc<dyn ConfigService + Send + Sync>,
+    hash_service: Arc<dyn HashService + Send + Sync>,
+    users_service: Arc<dyn UsersService + Send + Sync>,
+    database: Database,
+  ) -> Arc<dyn SessionService + Send + Sync> {
+    let token_service = AppManager::token_service(Arc::clone(&config_service));
+    let roles_service = AppManager::roles_service(Database::clone(&database));
+    let session_repository = AppManager::session_repository(database);
+
+    Arc::new(SessionServiceImpl::new(
+      config_service,
+      hash_service,
+      token_service,
+      users_service,
+      roles_service,
+      session_repository,
+    ))
   }
 
   fn router(
     config_service: Arc<dyn ConfigService + Send + Sync>,
     users_service: Arc<dyn UsersService + Send + Sync>,
+    session_service: Arc<dyn SessionService + Send + Sync>,
   ) -> BoxedFilter<(impl Reply,)> {
-    routes::build(config_service, users_service)
+    routes::build(config_service, users_service, session_service)
   }
 }

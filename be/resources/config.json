@@ -3,5 +3,14 @@
   "mongo": {
     "uri": "mongodb://localhost:27017",
     "database": "ausawards-dev"
+  },
+  "sess_sec_length": 30,
+  "session": {
+    "secret_length": 30,
+    "lifetime_sec": 2592000
+  },
+  "jwt": {
+    "secret": "Ac8XZ8Chya31/Fr+Gjc6IRln+csrnLfylYgEFZjS",
+    "exp_sec": 120
   }
 }
