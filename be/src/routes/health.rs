@@ -1,3 +1,4 @@
+use crate::filters::AuthenticationFilter;
 use crate::services::ConfigService;
 use serde::Serialize;
 use std::sync::Arc;
@@ -10,14 +11,24 @@ struct Response {
 }
 
 pub fn route(
+  authentication_filter: &Box<dyn AuthenticationFilter>,
   config_service: Arc<dyn ConfigService + Send + Sync>,
 ) -> BoxedFilter<(impl Reply,)> {
-  warp::path!("health")
+  let cs1 = Arc::clone(&config_service);
+  let health = warp::path::end().and(warp::get()).map(move || {
+    warp::reply::json(&Response {
+      name: cs1.get_config().app_name,
+    })
+  });
+
+  let health_secure = warp::path!("secure")
     .and(warp::get())
+    .and(authentication_filter.authenticated())
     .map(move || {
       warp::reply::json(&Response {
         name: config_service.get_config().app_name,
       })
-    })
-    .boxed()
+    });
+
+  warp::path!("health" / ..).and(health.or(health_secure)).boxed()
 }

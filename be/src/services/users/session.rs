@@ -1,7 +1,7 @@
 use crate::dto::{LogInRequest, LogInResponse, RefreshRequest, RefreshResponse};
-use crate::errors::{AuthenticationError, ServerError};
-use crate::model::session::SESSION_TYPE_USER;
-use crate::model::{User, UserSession};
+use crate::errors::{AuthenticationError, ServerError, ValidationError};
+use crate::model::session::{EXPIRY_REASON_LOG_OUT, SESSION_TYPE_USER};
+use crate::model::{SessionExpiry, User, UserSession};
 use crate::repositories::UserSessionRepository;
 use crate::services::{ConfigService, HashService, RolesService, TokenService, UsersService};
 use async_trait::async_trait;
@@ -17,6 +17,7 @@ use warp::Rejection;
 pub trait SessionService {
   async fn create_session(&self, request: &LogInRequest) -> Result<LogInResponse, Rejection>;
   async fn refresh_token(&self, request: &RefreshRequest) -> Result<RefreshResponse, Rejection>;
+  async fn sign_out(&self, session_id: &str) -> Result<(), Rejection>;
 }
 
 pub struct SessionServiceImpl {
@@ -134,5 +135,30 @@ impl SessionService for SessionServiceImpl {
     Ok(RefreshResponse {
       token: self.create_token(&user.unwrap(), &session).await?,
     })
+  }
+
+  async fn sign_out(&self, session_id: &str) -> Result<(), Rejection> {
+    let session = self
+      .session_repository
+      .find_active_by_id(session_id)
+      .await?;
+
+    if let None = session {
+      log::debug!(
+        "Attempted to sign out session {}, but no active session could be found",
+        session_id
+      );
+      return Err(warp::reject::custom(ValidationError::new()));
+    }
+
+    let mut session = session.unwrap();
+    session.expired = Some(SessionExpiry {
+      expired_by: session.user_id.clone(),
+      expired_at: bson::DateTime::from(Utc::now()),
+      reason: String::from(EXPIRY_REASON_LOG_OUT),
+    });
+    self.session_repository.save(&session).await?;
+
+    Ok(())
   }
 }

@@ -1,6 +1,8 @@
 use crate::converters::user::UserConverterImpl;
 use crate::converters::UserConverter;
 use crate::domain::AppConfig;
+use crate::filters::auth::AuthenticationFilterImpl;
+use crate::filters::AuthenticationFilter;
 use crate::repositories::role::RoleRepositoryImpl;
 use crate::repositories::session::UserSessionRepositoryImpl;
 use crate::repositories::users::UsersRepositoryImpl;
@@ -31,14 +33,22 @@ impl AppManager {
     let hash_service = AppManager::hash_service();
     let users_service =
       AppManager::users_service(Arc::clone(&hash_service), Database::clone(&database));
+    let token_service = AppManager::token_service(Arc::clone(&config_service));
     let session_service = AppManager::session_service(
       Arc::clone(&config_service),
       hash_service,
+      Arc::clone(&token_service),
       Arc::clone(&users_service),
       database,
     );
+    let authentication_filter = AppManager::authentication_filter(token_service);
 
-    AppManager::router(config_service, users_service, session_service)
+    AppManager::router(
+      &authentication_filter,
+      config_service,
+      users_service,
+      session_service,
+    )
   }
 
   fn config_service() -> Arc<dyn ConfigService + Send + Sync> {
@@ -83,6 +93,12 @@ impl AppManager {
     ))
   }
 
+  fn authentication_filter(
+    token_service: Arc<dyn TokenService + Send + Sync>,
+  ) -> Box<dyn AuthenticationFilter> {
+    Box::new(AuthenticationFilterImpl::new(token_service))
+  }
+
   fn hash_service() -> Arc<dyn HashService + Send + Sync> {
     Arc::new(HashServiceImpl::new())
   }
@@ -114,10 +130,10 @@ impl AppManager {
   fn session_service(
     config_service: Arc<dyn ConfigService + Send + Sync>,
     hash_service: Arc<dyn HashService + Send + Sync>,
+    token_service: Arc<dyn TokenService + Send + Sync>,
     users_service: Arc<dyn UsersService + Send + Sync>,
     database: Database,
   ) -> Arc<dyn SessionService + Send + Sync> {
-    let token_service = AppManager::token_service(Arc::clone(&config_service));
     let roles_service = AppManager::roles_service(Database::clone(&database));
     let session_repository = AppManager::session_repository(database);
 
@@ -132,10 +148,16 @@ impl AppManager {
   }
 
   fn router(
+    authentication_filter: &Box<dyn AuthenticationFilter>,
     config_service: Arc<dyn ConfigService + Send + Sync>,
     users_service: Arc<dyn UsersService + Send + Sync>,
     session_service: Arc<dyn SessionService + Send + Sync>,
   ) -> BoxedFilter<(impl Reply,)> {
-    routes::build(config_service, users_service, session_service)
+    routes::build(
+      authentication_filter,
+      config_service,
+      users_service,
+      session_service,
+    )
   }
 }
