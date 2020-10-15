@@ -5,12 +5,13 @@ mod converters;
 mod domain;
 mod dto;
 mod errors;
+mod filters;
+mod handlers;
 mod manager;
 mod model;
 mod repositories;
 mod routes;
 mod services;
-mod filters;
 
 #[tokio::main]
 async fn main() {

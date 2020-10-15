@@ -1,4 +1,5 @@
 use crate::filters::AuthenticationFilter;
+use crate::handlers;
 use crate::services::{ConfigService, SessionService, UsersService};
 use std::sync::Arc;
 use warp::filters::BoxedFilter;
@@ -17,5 +18,6 @@ pub fn build(
   health::route(authentication_filter, config_service)
     .or(users::route(authentication_filter, users_service))
     .or(session::route(authentication_filter, session_service))
+    .recover(handlers::error::handler)
     .boxed()
 }
