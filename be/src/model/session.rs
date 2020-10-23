@@ -1,3 +1,4 @@
+use crate::repositories::WithId;
 use bson::DateTime;
 use serde::{Deserialize, Serialize};
 
@@ -30,4 +31,10 @@ pub struct UserSession {
   #[serde(rename = "expireAt")]
   pub expire_at: DateTime,
   pub expired: Option<SessionExpiry>,
+}
+
+impl WithId for UserSession {
+  fn get_id(&self) -> &str {
+    &self.id
+  }
 }

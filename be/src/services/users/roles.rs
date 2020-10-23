@@ -6,7 +6,7 @@ use warp::Rejection;
 
 #[async_trait]
 pub trait RolesService {
-  async fn get_roles_by_id(&self, role_ids: &Vec<&str>) -> Result<Vec<Role>, Rejection>;
+  async fn get_roles_by_id(&self, role_ids: Vec<&str>) -> Result<Vec<Role>, Rejection>;
 }
 
 pub struct RolesServiceImpl {
@@ -21,7 +21,7 @@ impl RolesServiceImpl {
 
 #[async_trait]
 impl RolesService for RolesServiceImpl {
-  async fn get_roles_by_id(&self, role_ids: &Vec<&str>) -> Result<Vec<Role>, Rejection> {
+  async fn get_roles_by_id(&self, role_ids: Vec<&str>) -> Result<Vec<Role>, Rejection> {
     self.role_repository.find_by_ids(role_ids).await
   }
 }

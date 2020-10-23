@@ -13,7 +13,7 @@ pub trait TokenService {
     &self,
     user: &User,
     session: &UserSession,
-    roles: &Vec<&Role>,
+    roles: Vec<&Role>,
   ) -> Result<String, Rejection>;
   fn parse_token(&self, token: &str) -> Result<UserAuth, Rejection>;
 }
@@ -111,7 +111,7 @@ impl TokenService for TokenServiceImpl {
     &self,
     user: &User,
     session: &UserSession,
-    roles: &Vec<&Role>,
+    roles: Vec<&Role>,
   ) -> Result<String, Rejection> {
     let permissions: HashSet<&str> = roles
       .iter()

@@ -17,7 +17,7 @@ pub fn route(
       let us_local = Arc::clone(&users_service);
       async move {
         us_local
-          .create_admin_user(&request)
+          .create_admin_user(request)
           .await
           .map(|r| warp::reply::json(&r))
       }

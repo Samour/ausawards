@@ -13,7 +13,7 @@ use warp::Rejection;
 pub trait UsersService {
   async fn create_admin_user(
     &self,
-    user: &CreateSystemAdminUserRequest,
+    user: CreateSystemAdminUserRequest,
   ) -> Result<UserDto, Rejection>;
   async fn get_user(&self, user_id: &str) -> Result<Option<User>, Rejection>;
   async fn get_user_by_login_id(&self, login_id: &str) -> Result<Option<User>, Rejection>;
@@ -43,16 +43,16 @@ impl UsersServiceImpl {
 impl UsersService for UsersServiceImpl {
   async fn create_admin_user(
     &self,
-    user: &CreateSystemAdminUserRequest,
+    user: CreateSystemAdminUserRequest,
   ) -> Result<UserDto, Rejection> {
     log::info!("Creating user with loginId={}", user.login_id);
     let user = User {
       id: Uuid::new_v4().to_hyphenated().to_string(),
       user_type: String::from(USER_TYPE_ADMIN),
       company_id: None,
-      login_id: user.login_id.clone(),
+      login_id: user.login_id,
       password: self.hash_service.hash_pw(&user.password)?,
-      role_ids: user.role_ids.clone(),
+      role_ids: user.role_ids,
     };
     self.users_repository.save(&user).await?;
 

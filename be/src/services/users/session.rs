@@ -58,12 +58,12 @@ impl SessionServiceImpl {
   async fn create_token(&self, user: &User, session: &UserSession) -> Result<String, Rejection> {
     let roles = self
       .roles_service
-      .get_roles_by_id(&user.role_ids.iter().map(|i| i as &str).collect())
+      .get_roles_by_id(user.role_ids.iter().map(|i| i as &str).collect())
       .await?;
 
     self
       .token_service
-      .create_token(&user, &session, &roles.iter().collect())
+      .create_token(&user, &session, roles.iter().collect())
   }
 }
 

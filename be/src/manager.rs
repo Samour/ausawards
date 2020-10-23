@@ -1,19 +1,25 @@
+use crate::converters::award::AwardConverterImpl;
 use crate::converters::user::UserConverterImpl;
-use crate::converters::UserConverter;
+use crate::converters::{AwardConverter, UserConverter};
 use crate::domain::AppConfig;
 use crate::filters::auth::AuthenticationFilterImpl;
 use crate::filters::AuthenticationFilter;
+use crate::repositories::award::AwardRespositoryImpl;
 use crate::repositories::role::RoleRepositoryImpl;
 use crate::repositories::session::UserSessionRepositoryImpl;
 use crate::repositories::users::UsersRepositoryImpl;
-use crate::repositories::{RoleRepository, UserSessionRepository, UsersRepository};
+use crate::repositories::{
+  AwardRepository, RoleRepository, UserSessionRepository, UsersRepository,
+};
 use crate::routes;
+use crate::services::award::AwardServiceImpl;
 use crate::services::config::FileConfigService;
 use crate::services::users::{
   HashServiceImpl, RolesServiceImpl, SessionServiceImpl, TokenServiceImpl, UsersServiceImpl,
 };
 use crate::services::{
-  ConfigService, HashService, RolesService, SessionService, TokenService, UsersService,
+  AwardService, ConfigService, HashService, RolesService, SessionService, TokenService,
+  UsersService,
 };
 use mongodb::{Client, Database};
 use std::sync::Arc;
@@ -23,6 +29,7 @@ use warp::Reply;
 const COLLECTION_USERS: &str = "Users";
 const COLLECTION_SESSIONS: &str = "UserSessions";
 const COLLECTION_ROLES: &str = "Roles";
+const COLLECTION_AWARDS: &str = "Awards";
 
 pub struct AppManager {}
 
@@ -39,15 +46,17 @@ impl AppManager {
       hash_service,
       Arc::clone(&token_service),
       Arc::clone(&users_service),
-      database,
+      Database::clone(&database),
     );
     let authentication_filter = AppManager::authentication_filter(token_service);
+    let award_service = AppManager::award_service(database);
 
     AppManager::router(
       &authentication_filter,
       config_service,
       users_service,
       session_service,
+      award_service,
     )
   }
 
@@ -75,6 +84,10 @@ impl AppManager {
     Arc::new(UserConverterImpl::new())
   }
 
+  fn award_converter() -> Arc<dyn AwardConverter + Send + Sync> {
+    Arc::new(AwardConverterImpl::new())
+  }
+
   fn users_repository(database: Database) -> Arc<dyn UsersRepository + Send + Sync> {
     Arc::new(UsersRepositoryImpl::new(
       database.collection(COLLECTION_USERS),
@@ -90,6 +103,12 @@ impl AppManager {
   fn role_repository(database: Database) -> Arc<dyn RoleRepository + Send + Sync> {
     Arc::new(RoleRepositoryImpl::new(
       database.collection(COLLECTION_ROLES),
+    ))
+  }
+
+  fn award_repository(database: Database) -> Arc<dyn AwardRepository + Send + Sync> {
+    Arc::new(AwardRespositoryImpl::new(
+      database.collection(COLLECTION_AWARDS),
     ))
   }
 
@@ -147,17 +166,25 @@ impl AppManager {
     ))
   }
 
+  fn award_service(database: Database) -> Arc<dyn AwardService + Send + Sync> {
+    let award_converter = AppManager::award_converter();
+    let award_repository = AppManager::award_repository(database);
+    Arc::new(AwardServiceImpl::new(award_converter, award_repository))
+  }
+
   fn router(
     authentication_filter: &Box<dyn AuthenticationFilter>,
     config_service: Arc<dyn ConfigService + Send + Sync>,
     users_service: Arc<dyn UsersService + Send + Sync>,
     session_service: Arc<dyn SessionService + Send + Sync>,
+    award_service: Arc<dyn AwardService + Send + Sync>,
   ) -> BoxedFilter<(impl Reply,)> {
     routes::build(
       authentication_filter,
       config_service,
       users_service,
       session_service,
+      award_service,
     )
   }
 }

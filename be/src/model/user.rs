@@ -1,3 +1,4 @@
+use crate::repositories::WithId;
 use serde::{Deserialize, Serialize};
 
 pub const USER_TYPE_ADMIN: &str = "ADMIN";
@@ -15,4 +16,10 @@ pub struct User {
   pub password: String,
   #[serde(rename = "roleIds")]
   pub role_ids: Vec<String>,
+}
+
+impl WithId for User {
+  fn get_id(&self) -> &str {
+    &self.id
+  }
 }
